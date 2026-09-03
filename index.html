@@ -83,50 +83,62 @@ function scrBind(err){
   else{$('#go').disabled=false;scrBind(r.error||'e-mail не найден');}};
 }
 
+let TC=null;
+function findCached(id){ if(!TC)return null;
+ return TC.active.find(t=>String(t.id)===String(id))||TC.done.find(t=>String(t.id)===String(id))||null; }
+function upsertCache(t){ if(!TC)return;
+ const i=TC.active.findIndex(x=>String(x.id)===String(t.id)); if(i>=0){TC.active[i]=t;return;}
+ const j=TC.done.findIndex(x=>String(x.id)===String(t.id)); if(j>=0)TC.done[j]=t; }
+
 function scrMain(tab){
  TAB=tab||'active';
  app.innerHTML='<div class="hdr"><h2>'+(EMP?esc(EMP.name):'')+'</h2></div>'+
  '<div class="tabs"><div class="tab'+(TAB==='active'?' on':'')+'" id="tA">Активные</div>'+
  '<div class="tab'+(TAB==='done'?' on':'')+'" id="tD">Выполненные</div></div>'+
- '<div id="list"><div class="empty">Загрузка…</div></div>';
+ '<div id="list">'+(TC?'':'<div class="empty">Загрузка…</div>')+'</div>';
  $('#tA').onclick=()=>scrMain('active');$('#tD').onclick=()=>scrMain('done');
- api('tasks').then(r=>{
-  if(!r.ok){scrBind(r.error==='not_bound'?'':(r.error||''));return;}
-  const list=TAB==='active'?r.active:r.done;
-  if(!list.length){$('#list').innerHTML='<div class="empty">'+(TAB==='active'?'Нет активных поручений':'История пуста')+'</div>';return;}
-  $('#list').innerHTML=list.map(t=>
-   '<div class="card" data-id="'+esc(t.id)+'">'+badge(t.status)+
-   (t.overdue?' <span class="overdue">просрочено</span>':'')+
-   '<div class="t">'+esc(t.text)+'</div>'+
-   '<div class="meta"><span>Срок: '+esc(t.deadline)+'</span><span>'+esc(t.priority||'')+'</span></div></div>').join('');
-  document.querySelectorAll('.card').forEach(c=>c.onclick=()=>scrTask(c.dataset.id));
- });
+ if(TC)paintList(TC);
+ api('tasks').then(r=>{ if(!r.ok){scrBind(r.error==='not_bound'?'':(r.error||''));return;} TC=r; paintList(r); });
+}
+function paintList(r){
+ const list=TAB==='active'?r.active:r.done;
+ if(!list.length){$('#list').innerHTML='<div class="empty">'+(TAB==='active'?'Нет активных поручений':'История пуста')+'</div>';return;}
+ $('#list').innerHTML=list.map(t=>
+  '<div class="card" data-id="'+esc(t.id)+'">'+badge(t.status)+
+  (t.overdue?' <span class="overdue">просрочено</span>':'')+
+  '<div class="t">'+esc(t.text)+'</div>'+
+  '<div class="meta"><span>Срок: '+esc(t.deadline)+'</span><span>'+esc(t.priority||'')+'</span></div></div>').join('');
+ document.querySelectorAll('.card').forEach(c=>c.onclick=()=>scrTask(c.dataset.id));
 }
 
 function scrTask(id){
- app.innerHTML='<div class="empty">Загрузка…</div>';
- api('task',{id:id}).then(r=>{
-  if(!r.ok){toast('Задача недоступна');scrMain();return;}
-  const t=r.task;let zone='';
-  if(t.status==='Новая')zone='<button id="act" class="btn primary">Принять в работу</button>';
-  else if(t.status==='В работе')zone='<textarea id="rep" placeholder="Текст отчёта: что сделано, результат…">'+esc(t.report)+'</textarea><button id="act" class="btn green">Отправить отчёт</button>';
-  else if(t.status==='На доработке')zone='<div class="banner warn">Возвращено на доработку</div><textarea id="rep" placeholder="Текст отчёта…">'+esc(t.report)+'</textarea><button id="act" class="btn green">Переотправить отчёт</button>';
-  else if(t.status==='Отчет')zone='<div class="banner info">Отчёт на приёмке у автора — можно поправить и отправить заново</div><textarea id="rep">'+esc(t.report)+'</textarea><button id="act" class="btn green">Обновить отчёт</button>';
-  else zone=t.report?'<div class="row"><b>Отчёт:</b><div class="report">'+esc(t.report)+'</div></div>':'';
-  app.innerHTML='<span class="back" id="back">← К списку</span>'+
-   '<h2>'+badge(t.status)+(t.overdue?' <span class="overdue">просрочено</span>':'')+'</h2>'+
-   '<div class="card" style="cursor:default"><div class="t" style="font-size:16px">'+esc(t.text)+'</div>'+
-   '<div class="row"><b>Автор:</b> '+esc(t.author)+'</div>'+
-   '<div class="row"><b>Срок:</b> '+esc(t.deadline)+'</div>'+
-   '<div class="row"><b>Приоритет:</b> '+esc(t.priority||'—')+'</div></div>'+zone;
-  $('#back').onclick=()=>scrMain();
-  const btn=$('#act');
-  if(btn)btn.onclick=async()=>{btn.disabled=true;
-   if(t.status==='Новая'){const r2=await api('accept',{id:t.id});
-    if(r2.ok){toast('Взято в работу');scrTask(t.id);}else{toast(r2.error||'ошибка');btn.disabled=false;}}
-   else{const r2=await api('report',{id:t.id,text:(($('#rep')||{}).value||'')});
-    if(r2.ok){toast(t.status==='Отчет'?'Отчёт обновлён':'Отчёт отправлен');scrTask(t.id);}else{toast(r2.error||'ошибка');btn.disabled=false;}}};
- });
+ const c=findCached(id);
+ if(c)paintTask(c); else app.innerHTML='<div class="empty">Загрузка…</div>';
+ api('task',{id:id}).then(r=>{ if(r.ok){upsertCache(r.task);paintTask(r.task);} else if(!c){toast('Задача недоступна');scrMain();} });
+}
+function paintTask(t){
+ let zone='';
+ if(t.status==='Новая')zone='<button id="act" class="btn primary">Принять в работу</button>';
+ else if(t.status==='В работе')zone='<textarea id="rep" placeholder="Текст отчёта: что сделано, результат…">'+esc(t.report)+'</textarea><button id="act" class="btn green">Отправить отчёт</button>';
+ else if(t.status==='На доработке')zone='<div class="banner warn">Возвращено на доработку</div><textarea id="rep" placeholder="Текст отчёта…">'+esc(t.report)+'</textarea><button id="act" class="btn green">Переотправить отчёт</button>';
+ else if(t.status==='Отчет')zone='<div class="banner info">Отчёт на приёмке у автора — можно поправить и отправить заново</div><textarea id="rep">'+esc(t.report)+'</textarea><button id="act" class="btn green">Обновить отчёт</button>';
+ else zone=t.report?'<div class="row"><b>Отчёт:</b><div class="report">'+esc(t.report)+'</div></div>':'';
+ app.innerHTML='<span class="back" id="back">← К списку</span>'+
+  '<h2>'+badge(t.status)+(t.overdue?' <span class="overdue">просрочено</span>':'')+'</h2>'+
+  '<div class="card" style="cursor:default"><div class="t" style="font-size:16px">'+esc(t.text)+'</div>'+
+  '<div class="row"><b>Автор:</b> '+esc(t.author)+'</div>'+
+  '<div class="row"><b>Срок:</b> '+esc(t.deadline)+'</div>'+
+  '<div class="row"><b>Приоритет:</b> '+esc(t.priority||'—')+'</div></div>'+zone;
+ $('#back').onclick=()=>scrMain();
+ const btn=$('#act');
+ if(btn)btn.onclick=async()=>{btn.disabled=true;
+  const txt=($('#rep')||{}).value||'';
+  if(t.status==='Новая'){const r2=await api('accept',{id:t.id});
+   if(r2.ok){t.status='В работе';upsertCache(t);toast('Взято в работу');paintTask(t);}
+   else{toast(r2.error||'ошибка');btn.disabled=false;}}
+  else{const r2=await api('report',{id:t.id,text:txt});
+   if(r2.ok){t.report=txt;if(t.status!=='Отчет')t.status='Отчет';upsertCache(t);toast('Отчёт отправлен');paintTask(t);}
+   else{toast(r2.error||'ошибка');btn.disabled=false;}}};
 }
 
 window.addEventListener('load',()=>{
