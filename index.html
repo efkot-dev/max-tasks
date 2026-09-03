@@ -45,13 +45,13 @@ textarea{min-height:110px;resize:vertical}
 'use strict';
 const API='https://script.google.com/macros/s/AKfycby2ZXxseIXQH-YyfTOKrnVBa9MrBjxd8-7FLy2p11ttJL4QARtC9D4PVbw66DCpkdbE4w/exec';
 const ST={'Новая':'#2f7de1','В работе':'#e08a00','На доработке':'#b0468c','Отчет':'#0aa37a','Исполнено':'#3f9142','Отменено':'#8a8f98'};
-let UID=null,EMP=null,TAB='active';
+let UID=null,CHAT=null,EMP=null,TAB='active',TC=null;
 const $=s=>document.querySelector(s);
 const app=$('#app');
 
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 function toast(m){const t=$('#toast');t.textContent=m;t.style.opacity=1;setTimeout(()=>t.style.opacity=0,2200);}
-function api(cmd,extra){const b=Object.assign({cmd:cmd,user_id:UID},extra||{});
+function api(cmd,extra){const b=Object.assign({cmd:cmd,user_id:UID,chat_id:CHAT},extra||{});
  return fetch(API,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(b)})
  .then(r=>r.json()).catch(()=>({ok:false,error:'нет сети'}));}
 
@@ -67,23 +67,27 @@ function extractUid(){
  }catch(e){}
  return null;
 }
+function extractChat(){
+ try{const w=window.WebApp;
+  if(w&&w.initDataUnsafe){const u=w.initDataUnsafe;
+   if(u.chat&&u.chat.id)return u.chat.id;
+   if(u.chat_id)return u.chat_id;}
+  if(w&&typeof w.initData==='string'&&w.initData){const p=new URLSearchParams(w.initData);
+   const cj=p.get('chat'); if(cj){const o=JSON.parse(cj); if(o.id)return o.id;}
+   if(p.get('chat_id'))return p.get('chat_id');}
+ }catch(e){}
+ return null;
+}
 function startParam(){try{const u=window.WebApp&&window.WebApp.initDataUnsafe;return u&&u.start_param?String(u.start_param):'';}catch(e){return '';}}
 
 function badge(t){return '<span class="badge" style="background:'+(ST[t]||'#8a8f98')+'">'+esc(t)+'</span>';}
 
-function scrBind(err){
- app.innerHTML='<h2>Привязка аккаунта</h2>'+
- '<p class="muted">Укажите рабочий e-mail — тот же, что в справочнике сотрудников.</p>'+
- '<input id="email" type="email" placeholder="name@org.ru" autocomplete="email">'+
- (err?'<p class="err">'+esc(err)+'</p>':'')+
- '<button id="go" class="btn primary">Привязать</button>';
- $('#go').onclick=async()=>{const em=$('#email').value.trim();if(!em)return;
-  $('#go').disabled=true;const r=await api('bind',{email:em});
-  if(r.ok){EMP=r.emp;toast('Привязано: '+EMP.name);scrMain();}
-  else{$('#go').disabled=false;scrBind(r.error||'e-mail не найден');}};
+function scrNoAccess(code){
+ app.innerHTML='<div class="empty"><h2>Доступ не настроен</h2>'+
+ '<p class="muted">Ваш MAX-аккаунт не привязан к справочнику сотрудников.<br>Сообщите администратору код:</p>'+
+ '<h2 style="font-size:28px">'+esc(code)+'</h2></div>';
 }
 
-let TC=null;
 function findCached(id){ if(!TC)return null;
  return TC.active.find(t=>String(t.id)===String(id))||TC.done.find(t=>String(t.id)===String(id))||null; }
 function upsertCache(t){ if(!TC)return;
@@ -98,7 +102,7 @@ function scrMain(tab){
  '<div id="list">'+(TC?'':'<div class="empty">Загрузка…</div>')+'</div>';
  $('#tA').onclick=()=>scrMain('active');$('#tD').onclick=()=>scrMain('done');
  if(TC)paintList(TC);
- api('tasks').then(r=>{ if(!r.ok){scrBind(r.error==='not_bound'?'':(r.error||''));return;} TC=r; paintList(r); });
+ api('tasks').then(r=>{ if(!r.ok){scrNoAccess(r.user_id||UID||'—');return;} TC=r; paintList(r); });
 }
 function paintList(r){
  const list=TAB==='active'?r.active:r.done;
@@ -142,12 +146,12 @@ function paintTask(t){
 }
 
 window.addEventListener('load',()=>{
- UID=extractUid();
+ UID=extractUid(); CHAT=extractChat();
  if(!UID){app.innerHTML='<div class="empty"><h2>Откройте в МАКС</h2><p class="muted">Для теста в браузере добавьте ?uid=ВАШ_ID</p></div>';return;}
  const sp=startParam();
  api('init').then(r=>{
   if(r.ok){EMP=r.emp; sp?scrTask(sp):scrMain();}
-  else scrBind('');
+  else scrNoAccess(r.user_id||UID||'—');
  });
 });
 </script>
