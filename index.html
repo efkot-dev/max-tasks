@@ -125,7 +125,7 @@ function paintTask(t){
  if(t.status==='Новая')zone='<button id="act" class="btn primary">Принять в работу</button>';
  else if(t.status==='В работе')zone='<textarea id="rep" placeholder="Текст отчёта: что сделано, результат…">'+esc(t.report)+'</textarea><button id="act" class="btn green">Отправить отчёт</button>';
  else if(t.status==='На доработке')zone='<div class="banner warn">Возвращено на доработку</div><textarea id="rep" placeholder="Текст отчёта…">'+esc(t.report)+'</textarea><button id="act" class="btn green">Переотправить отчёт</button>';
- else if(t.status==='Отчет')zone='<div class="banner info">Отчёт на приёмке у автора — можно поправить и отправить заново</div><textarea id="rep">'+esc(t.report)+'</textarea><button id="act" class="btn green">Обновить отчёт</button>';
+ else if(t.status==='Отчет')zone='<div class="banner info">Отчёт на приёмке — можно поправить и отправить заново</div><textarea id="rep">'+esc(t.report)+'</textarea><button id="act" class="btn green">Обновить отчёт</button>';
  else zone=t.report?'<div class="row"><b>Отчёт:</b><div class="report">'+esc(t.report)+'</div></div>':'';
  app.innerHTML='<span class="back" id="back">← К списку</span>'+
   '<h2>'+badge(t.status)+(t.overdue?' <span class="overdue">просрочено</span>':'')+'</h2>'+
