@@ -130,7 +130,6 @@ function paintTask(t){
  app.innerHTML='<span class="back" id="back">← К списку</span>'+
   '<h2>'+badge(t.status)+(t.overdue?' <span class="overdue">просрочено</span>':'')+'</h2>'+
   '<div class="card" style="cursor:default"><div class="t" style="font-size:16px">'+esc(t.text)+'</div>'+
-  '<div class="row"><b>Автор:</b> '+esc(t.author)+'</div>'+
   '<div class="row"><b>Срок:</b> '+esc(t.deadline)+'</div>'+
   '<div class="row"><b>Приоритет:</b> '+esc(t.priority||'—')+'</div></div>'+zone;
  $('#back').onclick=()=>scrMain();
