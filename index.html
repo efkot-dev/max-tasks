@@ -45,6 +45,8 @@ textarea{min-height:110px;resize:vertical}
 .report{white-space:pre-wrap;background:#f2f5f9;border-radius:10px;padding:10px;font-size:.93em;margin-top:6px}
 .report.comm{background:#fff4e5}
 .empty{text-align:center;color:var(--muted);padding:40px 0}
+.btn.gray{background:#e8edf4;color:#1c2430}
+.delim{margin:16px 0 4px;font-size:.8em;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
 </style>
 </head>
 <body>
@@ -138,6 +140,25 @@ function scrTask(id){
  api('task',{id:id}).then(r=>{ if(r.ok){upsertCache(r.task);paintTask(r.task);} else if(!c){toast('Задача недоступна');scrMain();} });
 }
 
+function scrPick(t,note){
+ clearNav();
+ app.innerHTML='<div class="toprow"><span class="back" id="back">← К карточке</span>'+zoomHtml()+'</div>'+
+  '<h2>Кому поручить?</h2><div id="elist"><div class="empty">Загрузка…</div></div>';
+ $('#back').onclick=()=>paintTask(t);
+ api('employees').then(r=>{
+  if(!r.ok||!r.list){toast('ошибка списка');return;}
+  $('#elist').innerHTML=r.list.length?r.list.map(e=>
+   '<div class="card" data-uid="'+esc(e.id)+'"><div class="t">'+esc(e.name)+'</div></div>').join('')
+   :'<div class="empty">Нет доступных сотрудников</div>';
+  document.querySelectorAll('#elist .card').forEach(c=>c.onclick=async()=>{
+   c.style.opacity=.5;
+   const r2=await api('delegate',{id:t.id,to_user_id:c.dataset.uid,text:note});
+   if(r2.ok){toast('Поручено: '+c.querySelector('.t').textContent); setTimeout(()=>scrMain('active'),1200);}
+   else{toast(r2.error||'ошибка'); c.style.opacity=1;}
+  });
+ });
+}
+ 
 function paintTask(t, justSent){
  clearNav();
  const editable=(t.status==='В работе'||t.status==='На доработке'||t.status==='Отчет');
@@ -149,11 +170,18 @@ function paintTask(t, justSent){
  else if(t.status==='Отчет')zone='<div class="banner info">Отчёт на приёмке — можно поправить и отправить заново</div><textarea id="rep">'+esc(t.report)+'</textarea><button id="act" class="btn green">Обновить отчёт</button>';
  const info=(t.comment?'<div class="row"><b>Комментарий:</b><div class="report comm">'+esc(t.comment)+'</div></div>':'')+
    (!editable&&t.report?'<div class="row"><b>Отчёт:</b><div class="report">'+esc(t.report)+'</div></div>':'');
+  let del='';
+ if(EMP&&EMP.delegate&&['Новая','В работе','На доработке'].indexOf(t.status)>=0){
+  del='<div class="delim">Делегирование</div>'+
+   '<textarea id="note" placeholder="Комментарий / указание соисполнителю"></textarea>'+
+   '<button id="cmt" class="btn gray">Дописать комментарий</button>'+
+   '<button id="dlg" class="btn primary">Поручить соисполнителю</button>';
+ }
  app.innerHTML='<div class="toprow"><span class="back" id="back">← К списку</span>'+zoomHtml()+'</div>'+
   '<h2>'+badge(t.status)+(t.overdue?' <span class="overdue">просрочено</span>':'')+'</h2>'+
   '<div class="card" style="cursor:default"><div class="t" style="font-size:1.05em">'+esc(t.text)+'</div>'+
   '<div class="row"><b>Срок:</b> '+esc(t.deadline)+'</div>'+
-  '<div class="row"><b>Приоритет:</b> '+esc(t.priority||'—')+'</div>'+info+'</div>'+zone;
+  '<div class="row"><b>Приоритет:</b> '+esc(t.priority||'—')+'</div>'+info+'</div>'+zone+del;
  $('#back').onclick=()=>scrMain();
  const btn=$('#act');
  if(btn)btn.onclick=async()=>{btn.disabled=true;
@@ -165,6 +193,15 @@ function paintTask(t, justSent){
    if(r2.ok){t.report=txt;t.comment='';if(t.status!=='Отчет')t.status='Отчет';upsertCache(t);toast('Отчёт отправлен');paintTask(t,true);
      NAV_T=setTimeout(()=>scrMain('active'),5000);}
    else{toast(r2.error||'ошибка');btn.disabled=false;}}};
+  const cmt=$('#cmt');
+ if(cmt)cmt.onclick=async()=>{
+  const v=($('#note')||{}).value||''; if(!v.trim()){toast('Введите комментарий');return;}
+  cmt.disabled=true; const r2=await api('comment',{id:t.id,text:v});
+  if(r2.ok){toast('Комментарий добавлен');
+   api('task',{id:t.id}).then(r3=>{if(r3.ok){upsertCache(r3.task);paintTask(r3.task);}});}
+  else{toast(r2.error||'ошибка');cmt.disabled=false;}};
+ const dlg=$('#dlg');
+ if(dlg)dlg.onclick=()=>scrPick(t,(($('#note')||{}).value||''));
 }
 
 window.addEventListener('load',()=>{
