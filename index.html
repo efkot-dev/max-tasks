@@ -48,6 +48,8 @@ textarea{min-height:110px;resize:vertical}
 .btn.gray{background:#e8edf4;color:#1c2430}
 .delim{margin:16px 0 4px;font-size:.8em;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
 select{width:100%;border:1px solid #d4dbe6;border-radius:10px;padding:11px;font-size:1em;font-family:inherit;background:#fff;margin-top:10px}
+.btn.plus{width:56px;padding:6px 0;font-size:1.3em;background:#e8edf4;color:var(--blue);margin-top:10px}
+.btn.primary:disabled{background:#c6cfd9;color:#fff;opacity:1;cursor:default}
 </style>
 </head>
 <body>
@@ -156,11 +158,11 @@ function paintTask(t, justSent){
  let del='';
  if(EMP&&EMP.delegate&&['В работе','На доработке'].indexOf(t.status)>=0){
   del='<div class="delim">Делегирование</div>'+
-   '<button id="dlg" class="btn primary">Перепоручить</button>'+
+   '<button id="dplus" class="btn plus">+</button>'+
    '<div id="dbox" style="display:none">'+
    '<select id="dwho"><option value="">— выберите сотрудника —</option></select>'+
-   '<textarea id="note" placeholder="Комментарий / указание соисполнителю"></textarea>'+
-   '<button id="dgo" class="btn green">Готово</button></div>';
+   '<textarea id="note" placeholder="Комментарий / указание соисполнителю"></textarea></div>'+
+   '<button id="dgo" class="btn primary" disabled>Перепоручить</button>';
  }
  app.innerHTML='<div class="toprow"><span class="back" id="back">← К списку</span>'+zoomHtml()+'</div>'+
   '<h2>'+badge(t.status)+(t.overdue?' <span class="overdue">просрочено</span>':'')+'</h2>'+
@@ -178,8 +180,8 @@ function paintTask(t, justSent){
    if(r2.ok){t.report=txt;t.comment='';if(t.status!=='Отчет')t.status='Отчет';upsertCache(t);toast('Отчёт отправлен');paintTask(t,true);
      NAV_T=setTimeout(()=>scrMain('active'),5000);}
    else{toast(r2.error||'ошибка');btn.disabled=false;}}};
- const dlg=$('#dlg');
- if(dlg)dlg.onclick=()=>{
+ const dplus=$('#dplus');
+ if(dplus)dplus.onclick=()=>{
   const box=$('#dbox');
   if(box.style.display==='none'){
    box.style.display='block';
@@ -192,16 +194,23 @@ function paintTask(t, justSent){
   } else box.style.display='none';
  };
  const dgo=$('#dgo');
+ const dval=()=>{ if(!dgo)return;
+  const uid=($('#dwho')||{}).value||'';
+  const note=($('#note')||{}).value||'';
+  dgo.disabled=!(uid&&note.trim()); };
  if(dgo)dgo.onclick=async()=>{
   const uid=($('#dwho')||{}).value||'';
-  if(!uid){toast('Выберите сотрудника');return;}
   const note=($('#note')||{}).value||'';
+  if(!uid||!note.trim()){toast('Выберите сотрудника и укажите комментарий');return;}
   dgo.disabled=true;
   const r2=await api('delegate',{id:t.id,to_user_id:uid,text:note});
   if(r2.ok){toast('Перепоручено');
    api('task',{id:t.id}).then(r3=>{if(r3.ok){upsertCache(r3.task);paintTask(r3.task);}});}
-  else{toast(r2.error||'ошибка');dgo.disabled=false;}
+  else{toast(r2.error||'ошибка');dval();}
  };
+ const dw=$('#dwho'), dn=$('#note');
+ if(dw)dw.onchange=dval;
+ if(dn)dn.oninput=dval;
 }
 
 window.addEventListener('load',()=>{
