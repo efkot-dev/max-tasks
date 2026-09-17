@@ -48,7 +48,6 @@ textarea{min-height:110px;resize:vertical}
 .btn.gray{background:#e8edf4;color:#1c2430}
 .delim{margin:16px 0 4px;font-size:.8em;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
 select{width:100%;border:1px solid #d4dbe6;border-radius:10px;padding:11px;font-size:1em;font-family:inherit;background:#fff;margin-top:10px}
-.btn.plus{width:56px;padding:6px 0;font-size:1.3em;background:#e8edf4;color:var(--blue);margin-top:10px}
 .btn.primary:disabled{background:#c6cfd9;color:#fff;opacity:1;cursor:default}
 </style>
 </head>
@@ -158,10 +157,8 @@ function paintTask(t, justSent){
  let del='';
  if(EMP&&EMP.delegate&&['В работе','На доработке'].indexOf(t.status)>=0){
   del='<div class="delim">Делегирование</div>'+
-   '<button id="dplus" class="btn plus">+</button>'+
-   '<div id="dbox" style="display:none">'+
    '<select id="dwho"><option value="">— выберите сотрудника —</option></select>'+
-   '<textarea id="note" placeholder="Комментарий / указание соисполнителю"></textarea></div>'+
+   '<textarea id="note" placeholder="Комментарий / указание соисполнителю"></textarea>'+
    '<button id="dgo" class="btn primary" disabled>Перепоручить</button>';
  }
  app.innerHTML='<div class="toprow"><span class="back" id="back">← К списку</span>'+zoomHtml()+'</div>'+
@@ -170,6 +167,13 @@ function paintTask(t, justSent){
   '<div class="row"><b>Срок:</b> '+esc(t.deadline)+'</div>'+
   '<div class="row"><b>Приоритет:</b> '+esc(t.priority||'—')+'</div>'+info+'</div>'+zone+del;
  $('#back').onclick=()=>scrMain();
+  if($('#dwho')){
+  const fill=()=>{ const s=$('#dwho'); if(!s)return;
+   s.innerHTML='<option value="">— выберите сотрудника —</option>'+
+    (EMP_LIST||[]).map(e=>'<option value="'+esc(e.id)+'">'+esc(e.name)+'</option>').join(''); };
+  if(EMP_LIST)fill();
+  else api('employees').then(r=>{ if(r.ok&&r.list){ EMP_LIST=r.list; fill(); } });
+ }
  const btn=$('#act');
  if(btn)btn.onclick=async()=>{btn.disabled=true;
   const txt=($('#rep')||{}).value||'';
